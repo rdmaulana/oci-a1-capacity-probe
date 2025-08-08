@@ -65,20 +65,28 @@ log "Using IMAGE_OCID=${IMAGE_OCID}"
 DISPLAY_NAME="a1-probe-$(date +%s)"
 log "Attempting to launch '${SHAPE}' (OCPUs=${OCPUS}, Memory=${MEMORY_GB}GB) in AD='${AD_NAME}' ..."
 
+PAYLOAD="$(mktemp)"
+cat > "$PAYLOAD" <<EOF
+{
+  "availabilityDomain": "${AD_NAME}",
+  "compartmentId": "${COMPARTMENT_OCID}",
+  "displayName": "${DISPLAY_NAME}",
+  "shape": "${SHAPE}",
+  "shapeConfig": { "ocpus": ${OCPUS}, "memoryInGBs": ${MEMORY_GB} },
+  "sourceDetails": { "sourceType": "image", "imageId": "${IMAGE_OCID}" },
+  "createVnicDetails": { "subnetId": "${SUBNET_OCID}", "assignPublicIp": false }
+}
+EOF
+
 set +e
-LAUNCH_JSON="$(oci compute instance launch \
-  --profile "${OCI_PROFILE}" \
-  --availability-domain "${AD_NAME}" \
-  --compartment-id "${COMPARTMENT_OCID}" \
-  --shape "${SHAPE}" \
-  --shape-config "{\"ocpus\": ${OCPUS}, \"memoryInGBs\": ${MEMORY_GB}}" \
-  --display-name "${DISPLAY_NAME}" \
-  --source-details "{\"sourceType\":\"image\",\"imageId\":\"${IMAGE_OCID}\"}" \
-  --subnet-id "${SUBNET_OCID}" \
-  --assign-public-ip false \
-  --metadata '{}' \
-  --wait-for-state RUNNING 2>&1)"
+LAUNCH_JSON="$(
+  oci compute instance launch \
+    --profile "${OCI_PROFILE}" \
+    --from-json "file://${PAYLOAD}" \
+    --wait-for-state RUNNING 2>&1
+)"
 STATUS=$?
+rm -f "$PAYLOAD"
 set -e
 
 if [[ $STATUS -ne 0 ]]; then
