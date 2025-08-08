@@ -71,12 +71,12 @@ LAUNCH_JSON="$(oci compute instance launch \
   --availability-domain "${AD_NAME}" \
   --compartment-id "${COMPARTMENT_OCID}" \
   --shape "${SHAPE}" \
-  --shape-config "{\"ocpus\": ${OCPUS}, \"memoryInGBs\": ${MEMORY_GB}}" \
+  --shape-config '{"ocpus":'${OCPUS}',"memoryInGBs":'${MEMORY_GB}'}' \
   --display-name "${DISPLAY_NAME}" \
-  --source-details "{\"sourceType\":\"image\",\"imageId\":\"${IMAGE_OCID}\"}" \
+  --source-details '{"sourceType":"image","imageId":"'${IMAGE_OCID}'"}' \
   --subnet-id "${SUBNET_OCID}" \
   --assign-public-ip false \
-  --metadata '{}' \
+  --metadata '{"user_data": null}' \
   --wait-for-state RUNNING 2>&1)"
 STATUS=$?
 set -e
