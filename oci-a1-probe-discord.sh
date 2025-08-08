@@ -67,7 +67,6 @@ log "Attempting to launch '${SHAPE}' (OCPUs=${OCPUS}, Memory=${MEMORY_GB}GB) in 
 
 set +e
 LAUNCH_JSON="$(oci compute instance launch \
-  --debug \
   --profile "${OCI_PROFILE}" \
   --availability-domain "${AD_NAME}" \
   --compartment-id "${COMPARTMENT_OCID}" \
@@ -81,6 +80,8 @@ LAUNCH_JSON="$(oci compute instance launch \
   --wait-for-state RUNNING 2>&1)"
 STATUS=$?
 set -e
+
+log "Launch json payload: ${LAUNCH_JSON}"
 
 if [[ $STATUS -ne 0 ]]; then
   if echo "${LAUNCH_JSON}" | grep -qi "Out of capacity"; then
