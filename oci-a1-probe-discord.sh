@@ -73,16 +73,16 @@ cat > "$PAYLOAD" <<EOF
   "displayName": "${DISPLAY_NAME}",
   "shape": "${SHAPE}",
   "shapeConfig": { "ocpus": ${OCPUS}, "memoryInGBs": ${MEMORY_GB} },
-  "sourceDetails": { "sourceType": "image", "imageId": "${IMAGE_OCID}" },
-  "createVnicDetails": { "subnetId": "${SUBNET_OCID}", "assignPublicIp": false }
+  "sourceDetails": { "sourceType": "image", "imageId": "${IMAGE_OCID}" }
 }
 EOF
 
 set +e
 LAUNCH_JSON="$(
   oci compute instance launch \
-    --profile "${OCI_PROFILE}" \
     --from-json "file://${PAYLOAD}" \
+    --subnet-id "${SUBNET_OCID}" \
+    --assign-public-ip false \
     --wait-for-state RUNNING 2>&1
 )"
 STATUS=$?
