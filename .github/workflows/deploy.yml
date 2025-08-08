@@ -50,8 +50,8 @@ jobs:
 
       - name: Run probe
         run: |
-          chmod +x ./oci-a1-probe-discord.v3.sh
-          ./oci-a1-probe-discord.v3.sh || EXIT=$?
+          chmod +x ./oci-a1-probe-discord.sh
+          ./oci-a1-probe-discord.sh || EXIT=$?
           # Normalize exit code for scheduler visibility
           if [ "${EXIT:-0}" -eq 2 ]; then
             echo "Out of capacity"; exit 0
