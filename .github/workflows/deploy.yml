@@ -11,14 +11,16 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     env:
+      SUPPRESS_LABEL_WARNING: True
       OCI_CLI_USER: ${{ secrets.OCI_USER_OCID }}
       OCI_CLI_TENANCY: ${{ secrets.OCI_TENANCY_OCID }}
       OCI_CLI_REGION: ap-singapore-1
       OCI_CLI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
       OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_PRIVATE_KEY_PEM }}
+      OCI_CLI_PASSPHRASE: ${{ secrets.OCI_PASSPHRASE }}
       COMPARTMENT_OCID: ${{ secrets.OCI_COMPARTMENT_OCID }}
       SUBNET_OCID: ${{ secrets.OCI_SUBNET_OCID }}
-      AD_NAME: "rgva:AP-SINGAPORE-1-AD-1"
+      AD_NAME: "Uocm:AP-SINGAPORE-1-AD-1"
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       IMAGE_FILTER: "Canonical-Ubuntu-24.04-Minimal-aarch64-2025.07.23-0"
 
@@ -30,7 +32,7 @@ jobs:
           python3 -m pip install --upgrade pip
           pip install oci-cli
 
-      - name: Write OCI config (no logging of secrets)
+      - name: Write OCI config
         run: |
           mkdir -p ~/.oci
           printf "%s\n" "${OCI_CLI_KEY_CONTENT}" > ~/.oci/oci_api_key.pem
@@ -42,6 +44,7 @@ jobs:
           region=${OCI_CLI_REGION}
           fingerprint=${OCI_CLI_FINGERPRINT}
           key_file=${HOME}/.oci/oci_api_key.pem
+          pass_phrase=${OCI_CLI_PASSPHRASE}
           EOF
           chmod 600 ~/.oci/config
 
@@ -52,7 +55,6 @@ jobs:
         run: |
           chmod +x ./oci-a1-probe-discord.sh
           ./oci-a1-probe-discord.sh || EXIT=$?
-          # Normalize exit code for scheduler visibility
           if [ "${EXIT:-0}" -eq 2 ]; then
             echo "Out of capacity"; exit 0
           fi
