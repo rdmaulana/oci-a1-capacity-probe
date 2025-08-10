@@ -49,7 +49,7 @@ jobs:
           chmod 600 ~/.oci/config
 
       - name: Sanity check
-        run: oci iam region list --output json
+        run: oci iam region list > /dev/null
 
       - name: Run probe
         run: |
