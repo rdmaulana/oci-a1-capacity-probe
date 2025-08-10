@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# oci-a1-probe-discord.v3.sh
+# oci-a1-probe-discord.v4-fixed.sh
 # Probe OCI Ampere A1 capacity with Discord notifications.
-# Image selection uses an exact match on the image display-name provided via IMAGE_FILTER,
-# or you can set IMAGE_OCID directly to skip lookup.
+# Fixed based on Oracle's official example
 #
 set -euo pipefail
 
@@ -65,49 +64,80 @@ log "Using IMAGE_OCID=${IMAGE_OCID}"
 DISPLAY_NAME="a1-probe-$(date +%s)"
 log "Attempting to launch '${SHAPE}' (OCPUs=${OCPUS}, Memory=${MEMORY_GB}GB) in AD='${AD_NAME}' ..."
 
+# Create JSON variables using jq (following Oracle's pattern)
+metadata=$(echo '{}' | jq -rc)
+shape_config=$(echo '{
+    "ocpus": '${OCPUS}',
+    "memoryInGBs": '${MEMORY_GB}'
+}' | jq -rc)
+
 set +e
-LAUNCH_JSON="$(oci compute instance launch \
+# Launch instance using Oracle's exact pattern
+LAUNCH_RESULT=$(oci compute instance launch \
   --profile "${OCI_PROFILE}" \
   --availability-domain "${AD_NAME}" \
   --compartment-id "${COMPARTMENT_OCID}" \
-  --shape "${SHAPE}" \
-  --shape-config '{"ocpus":'${OCPUS}',"memoryInGBs":'${MEMORY_GB}'}' \
   --display-name "${DISPLAY_NAME}" \
-  --source-details '{"sourceType":"image","imageId":"'${IMAGE_OCID}'"}' \
+  --image-id "${IMAGE_OCID}" \
+  --metadata "${metadata}" \
+  --shape "${SHAPE}" \
+  --shape-config "${shape_config}" \
   --subnet-id "${SUBNET_OCID}" \
   --assign-public-ip false \
-  --metadata '{}' \
-  --wait-for-state RUNNING 2>&1)"
+  --wait-for-state "RUNNING" 2>/dev/null)
 STATUS=$?
 set -e
 
-if [[ $STATUS -ne 0 ]]; then
-  if echo "${LAUNCH_JSON}" | grep -qi "Out of capacity"; then
+# Extract data from result using jq (following Oracle's pattern)
+if [[ $STATUS -eq 0 ]]; then
+  instance_data=$(echo "${LAUNCH_RESULT}" | jq -rc '.data')
+  INSTANCE_ID=$(echo "${instance_data}" | jq -r '.id')
+  
+  if [[ -z "${INSTANCE_ID}" || "${INSTANCE_ID}" == "null" ]]; then
+    log "ERROR: Unable to parse instance ID from launch output."
+    exit 1
+  fi
+  
+  log "Instance created: ${INSTANCE_ID} (capacity AVAILABLE)."
+  
+  # Immediately terminate the instance to avoid consuming free quota
+  log "Terminating probe instance ..."
+  oci compute instance terminate \
+    --profile "${OCI_PROFILE}" \
+    --instance-id "${INSTANCE_ID}" \
+    --force \
+    --preserve-boot-volume false \
+    --wait-for-state "TERMINATED" 2>/dev/null || {
+      log "Warning: Failed to terminate instance ${INSTANCE_ID}. You may need to terminate it manually."
+    }
+  
+  log "Probe completed: capacity AVAILABLE at $(date)."
+  notify "✅ OCI A1 capacity **AVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
+  exit 0
+else
+  # Capture error with debug info but without --debug flag
+  set +e
+  ERROR_OUTPUT=$(oci compute instance launch \
+    --profile "${OCI_PROFILE}" \
+    --availability-domain "${AD_NAME}" \
+    --compartment-id "${COMPARTMENT_OCID}" \
+    --display-name "${DISPLAY_NAME}" \
+    --image-id "${IMAGE_OCID}" \
+    --metadata "${metadata}" \
+    --shape "${SHAPE}" \
+    --shape-config "${shape_config}" \
+    --subnet-id "${SUBNET_OCID}" \
+    --assign-public-ip false 2>&1)
+  set -e
+  
+  if echo "${ERROR_OUTPUT}" | grep -qi "Out of capacity\|OutOfCapacity\|LimitExceeded"; then
     log "No capacity available for ${SHAPE} in ${AD_NAME}."
+    notify "⚠️ OCI A1 capacity **UNAVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
     exit 2
   fi
+  
   log "Launch failed with error:"
-  printf "%s\n" "${LAUNCH_JSON}"
-  notify "❌ OCI A1 capacity **UNAVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}. \`\`\`${LAUNCH_JSON}\`\`\`"
+  printf "%s\n" "${ERROR_OUTPUT}"
+  notify "❌ OCI A1 launch **FAILED** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
   exit 1
 fi
-
-# Parse instance OCID
-INSTANCE_ID="$(printf "%s" "${LAUNCH_JSON}" | awk -F'"' '/"id":/ {print $4; exit}')"
-if [[ -z "${INSTANCE_ID}" ]]; then
-  log "ERROR: Unable to parse instance ID from launch output."
-  exit 1
-fi
-log "Instance created: ${INSTANCE_ID} (capacity AVAILABLE)."
-
-# Immediately terminate the instance to avoid consuming free quota
-log "Terminating probe instance ..."
-oci compute instance terminate \
-  --profile "${OCI_PROFILE}" \
-  --instance-id "${INSTANCE_ID}" \
-  --force \
-  --preserve-boot-volume false >/dev/null
-
-log "Probe completed: capacity AVAILABLE at $(date)."
-notify "✅ OCI A1 capacity **AVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
-exit 0
