@@ -26,6 +26,7 @@ OCPUS="${OCPUS:-1}"
 MEMORY_GB="${MEMORY_GB:-6}"
 IMAGE_OCID="${IMAGE_OCID:-ocid1.image.oc1.ap-singapore-1.aaaaaaaay6rp22ldj66r644xj6lnotor6ououzx2m2zwyoczcpekuratoimq}"
 IMAGE_FILTER="${IMAGE_FILTER:-Canonical-Ubuntu-24.04-Minimal-aarch64-2025.07.23-0}"
+AD_NAME="${AD_NAME:-rgva:AP-SINGAPORE-1-AD-1}"
 
 : "${COMPARTMENT_OCID:?COMPARTMENT_OCID is required}"
 : "${SUBNET_OCID:?SUBNET_OCID is required}"
