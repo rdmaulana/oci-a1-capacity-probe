@@ -67,18 +67,18 @@ log "Attempting to launch '${SHAPE}' (OCPUs=${OCPUS}, Memory=${MEMORY_GB}GB) in 
 
 set +e
 LAUNCH_JSON="$(oci compute instance launch \
-  --profile "${OCI_PROFILE}" \
-  --availability-domain "${AD_NAME}" \
-  --compartment-id "${COMPARTMENT_OCID}" \
-  --shape "${SHAPE}" \
+  --profile '${OCI_PROFILE}' \
+  --availability-domain '${AD_NAME}' \
+  --compartment-id '${COMPARTMENT_OCID}' \
+  --shape '${SHAPE}' \
   --shape-config '{"ocpus":'${OCPUS}',"memoryInGBs":'${MEMORY_GB}'}' \
-  --display-name "${DISPLAY_NAME}" \
+  --display-name '${DISPLAY_NAME}' \
   --source-details '{"sourceType":"image","imageId":"'${IMAGE_OCID}'"}' \
-  --subnet-id "${SUBNET_OCID}" \
+  --subnet-id '${SUBNET_OCID}' \
   --assign-public-ip false \
   --metadata '{"userData":null}' \
-  --wait-for-state RUNNING 2>&1)" \
-  --debug
+  --wait-for-state RUNNING \
+  --debug 2>&1)"
 STATUS=$?
 set -e
 
