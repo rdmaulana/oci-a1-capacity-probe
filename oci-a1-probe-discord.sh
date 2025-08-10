@@ -133,12 +133,12 @@ else
   
   if echo "${ERROR_OUTPUT}" | grep -qi "Out of capacity\|OutOfCapacity\|LimitExceeded"; then
     log "No capacity available for ${SHAPE} in ${AD_NAME}."
-    notify "⚠️ OCI A1 capacity **UNAVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
+    notify "⚠️ OCI A1 capacity **UNAVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}. \`\`\`${ERROR_OUTPUT}\`\`\`"
     exit 2
   fi
   
   log "Launch failed with error:"
   printf "%s\n" "${ERROR_OUTPUT}"
-  notify "❌ OCI A1 launch **FAILED** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
+  notify "❌ OCI A1 launch **FAILED** in ${AD_NAME}. Image: ${IMAGE_FILTER}. \`\`\`${ERROR_OUTPUT}\`\`\`"
   exit 1
 fi
