@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# oci-a1-probe-discord.v3-fixed.sh
+# oci-a1-probe-discord.v3.sh
 # Probe OCI Ampere A1 capacity with Discord notifications.
-# Fixed version to handle JSON parsing issues
+# Image selection uses an exact match on the image display-name provided via IMAGE_FILTER,
+# or you can set IMAGE_OCID directly to skip lookup.
 #
 set -euo pipefail
 
@@ -64,78 +65,39 @@ log "Using IMAGE_OCID=${IMAGE_OCID}"
 DISPLAY_NAME="a1-probe-$(date +%s)"
 log "Attempting to launch '${SHAPE}' (OCPUs=${OCPUS}, Memory=${MEMORY_GB}GB) in AD='${AD_NAME}' ..."
 
-# Create temporary files for JSON payloads to avoid shell escaping issues
-SHAPE_CONFIG_FILE=$(mktemp)
-SOURCE_DETAILS_FILE=$(mktemp)
-
-# Create shape config JSON
-cat > "${SHAPE_CONFIG_FILE}" << EOF
-{
-  "ocpus": ${OCPUS},
-  "memoryInGBs": ${MEMORY_GB}
-}
-EOF
-
-# Create source details JSON
-cat > "${SOURCE_DETAILS_FILE}" << EOF
-{
-  "sourceType": "image",
-  "imageId": "${IMAGE_OCID}"
-}
-EOF
-
-# Cleanup function
-cleanup() {
-  rm -f "${SHAPE_CONFIG_FILE}" "${SOURCE_DETAILS_FILE}"
-}
-trap cleanup EXIT
-
 set +e
 LAUNCH_JSON="$(oci compute instance launch \
   --profile "${OCI_PROFILE}" \
   --availability-domain "${AD_NAME}" \
   --compartment-id "${COMPARTMENT_OCID}" \
   --shape "${SHAPE}" \
-  --shape-config "file://${SHAPE_CONFIG_FILE}" \
+  --shape-config '{"ocpus":'${OCPUS}',"memoryInGBs":'${MEMORY_GB}'}' \
   --display-name "${DISPLAY_NAME}" \
-  --source-details "file://${SOURCE_DETAILS_FILE}" \
+  --source-details '{"sourceType":"image","imageId":"'${IMAGE_OCID}'"}' \
   --subnet-id "${SUBNET_OCID}" \
   --assign-public-ip false \
-  --wait-for-state RUNNING \
-  2>&1)"
+  --metadata '{}' \
+  --wait-for-state RUNNING 2>&1)"
 STATUS=$?
 set -e
 
-log "Launch result: ${LAUNCH_JSON}"
-
 if [[ $STATUS -ne 0 ]]; then
-  if echo "${LAUNCH_JSON}" | grep -qi "Out of capacity\|OutOfCapacity\|LimitExceeded"; then
+  if echo "${LAUNCH_JSON}" | grep -qi "Out of capacity"; then
     log "No capacity available for ${SHAPE} in ${AD_NAME}."
-    notify "⚠️ OCI A1 capacity **UNAVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
     exit 2
   fi
   log "Launch failed with error:"
   printf "%s\n" "${LAUNCH_JSON}"
-  notify "❌ OCI A1 launch **FAILED** in ${AD_NAME}. Image: ${IMAGE_FILTER}. Error: $(echo "${LAUNCH_JSON}" | head -1)"
+  notify "❌ OCI A1 capacity **UNAVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}. \`\`\`${LAUNCH_JSON}\`\`\`"
   exit 1
 fi
 
-# Parse instance OCID - try multiple methods
-INSTANCE_ID=""
-if command -v jq >/dev/null 2>&1; then
-  INSTANCE_ID="$(printf "%s" "${LAUNCH_JSON}" | jq -r '.data.id // empty' 2>/dev/null || true)"
-fi
-
-if [[ -z "${INSTANCE_ID}" ]]; then
-  INSTANCE_ID="$(printf "%s" "${LAUNCH_JSON}" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
-fi
-
+# Parse instance OCID
+INSTANCE_ID="$(printf "%s" "${LAUNCH_JSON}" | awk -F'"' '/"id":/ {print $4; exit}')"
 if [[ -z "${INSTANCE_ID}" ]]; then
   log "ERROR: Unable to parse instance ID from launch output."
-  log "Launch output was: ${LAUNCH_JSON}"
   exit 1
 fi
-
 log "Instance created: ${INSTANCE_ID} (capacity AVAILABLE)."
 
 # Immediately terminate the instance to avoid consuming free quota
@@ -144,9 +106,7 @@ oci compute instance terminate \
   --profile "${OCI_PROFILE}" \
   --instance-id "${INSTANCE_ID}" \
   --force \
-  --preserve-boot-volume false >/dev/null 2>&1 || {
-    log "Warning: Failed to terminate instance ${INSTANCE_ID}. You may need to terminate it manually."
-  }
+  --preserve-boot-volume false >/dev/null
 
 log "Probe completed: capacity AVAILABLE at $(date)."
 notify "✅ OCI A1 capacity **AVAILABLE** in ${AD_NAME}. Image: ${IMAGE_FILTER}."
