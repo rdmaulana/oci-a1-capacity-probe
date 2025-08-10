@@ -77,7 +77,8 @@ LAUNCH_JSON="$(oci compute instance launch \
   --subnet-id "${SUBNET_OCID}" \
   --assign-public-ip false \
   --metadata '{"userData":null}' \
-  --wait-for-state RUNNING 2>&1)"
+  --wait-for-state RUNNING 2>&1)" \
+  --debug
 STATUS=$?
 set -e
 
