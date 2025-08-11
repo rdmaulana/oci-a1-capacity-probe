@@ -1,7 +1,7 @@
 name: OCI A1 Capacity Probe
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/60 * * * *"
   workflow_dispatch:
 
 permissions:
